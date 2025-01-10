@@ -10,6 +10,7 @@ yargs(hideBin(process.argv))
     debug?: boolean;
     omitFileNames?: boolean;
     ignorePackage?: string[]
+    dontGroupClasses?: boolean;
   }>(
     "$0 <sourceFile> <callTarget>",
     "generate a call graph",
@@ -30,6 +31,7 @@ yargs(hideBin(process.argv))
           debug: argv.debug,
           omitFileNames: argv.omitFileNames,
           ignorePackages: argv.ignorePackage,
+          dontGroupClasses: argv.dontGroupClasses,
         });
         process.exit(0);
       } catch (e) {
@@ -63,6 +65,10 @@ yargs(hideBin(process.argv))
     "omitFileNames": {
       type: "boolean",
       description: "Omit file names from the output",
+    },
+    "dontGroupClasses": {
+      type: "boolean",
+      description: "Don't group classes in the output",
     },
   })
   .parse();
