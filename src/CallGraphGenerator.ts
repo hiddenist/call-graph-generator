@@ -9,17 +9,19 @@ export class CallGraphGenerator {
     sourceFile,
     callableExpressionName: executionName,
     debug = false,
+    omitFileNames = false,
+    ignorePackages = [],
   }: RunArgs): void {
     const args = {
       tsConfigFilePath,
     };
     if (debug) {
-      console.debug("Creating CallGraphGenerator instance", args);
+      console.error("Creating CallGraphGenerator instance", args);
     }
     const instance = new CallGraphGenerator(args);
 
     if (debug) {
-      console.debug("Enabling debug mode on instance");
+      console.error("Enabling debug mode on instance");
       instance.debugEnabled = true;
     }
 
@@ -28,10 +30,13 @@ export class CallGraphGenerator {
     const declaration = instance.findDeclaration(source, executionName);
     const trace = instance.traceExecution(declaration);
 
-    instance.writeTraceAsD2Graph(source, declaration, trace);
+    instance.writeTraceAsD2Graph(source, declaration, trace, {
+      omitFileNames,
+      ignorePackages
+    });
 
     if (debug) {
-      console.debug("Run complete");
+      console.error("Run complete");
     }
   }
 
@@ -43,7 +48,7 @@ export class CallGraphGenerator {
       const output = Array.isArray(unpackedMessage)
         ? unpackedMessage
         : [unpackedMessage];
-      console.debug(...output);
+      console.error(...output);
     }
   }
 
@@ -58,7 +63,7 @@ export class CallGraphGenerator {
     targetName: string,
   ): tsm.MethodDeclaration | tsm.FunctionDeclaration {
     if (this.debugEnabled) {
-      console.debug(`Finding statements for ${targetName} in ${sourceFile}`);
+      console.error(`Finding statements for ${targetName} in ${sourceFile}`);
     }
 
     const [classOrFunctionName, methodName] = targetName.split(".");
@@ -210,24 +215,36 @@ export class CallGraphGenerator {
     source: tsm.SourceFile,
     rootDeclaration: Declaration,
     trace: Trace,
+    options: { omitFileNames?: boolean, ignorePackages?: string[] } = {},
   ): void {
+    const ignore = new Set(options.ignorePackages);
+
     const getDeclarationFileOrPackageIdentifier = (
       sourceFile: tsm.SourceFile,
     ) => {
-      if (sourceFile === source) {
-        return `"Current File"`;
-      }
-      if (!sourceFile.isInNodeModules()) {
-        const relativePath =
-          source.getRelativePathAsModuleSpecifierTo(sourceFile) + `.${sourceFile.getExtension()}`;
-        return `"${relativePath}"`;
+      if (sourceFile.isInNodeModules()) {
+        const parts = sourceFile.getFilePath().split("node_modules");
+        const packageName =
+          parts.pop()?.match(/\/(?<packageName>(@[^\/]+\/)?([^\/]+))\//)?.groups
+            ?.packageName ?? `Unknown Package`;
+        if (ignore.has(packageName)) {
+          return null;
+        }
+        return `node_modules."${packageName}".`;
       }
 
-      const parts = sourceFile.getFilePath().split("node_modules");
-      const packageName =
-        parts.pop()?.match(/\/(?<packageName>(@[^\/]+\/)?([^\/]+))\//)?.groups
-          ?.packageName ?? `node_modules."Unknown Package"`;
-      return `node_modules."${packageName}"`;
+      if (options.omitFileNames) {
+        return "";
+      }
+
+      if (sourceFile === source) {
+        return `"Current File".`;
+      }
+
+      const relativePath =
+        source.getRelativePathAsModuleSpecifierTo(sourceFile) +
+        `.${sourceFile.getExtension()}`;
+      return `"${relativePath}".`;
     };
 
     const getD2Identifier = (declaration: Declaration) => {
@@ -235,29 +252,47 @@ export class CallGraphGenerator {
         CallGraphGenerator.getDeclarationName(declaration);
 
       const declarationSource = declaration.getSourceFile();
+      const packageOrFile = getDeclarationFileOrPackageIdentifier(declarationSource)
 
-      return `${getDeclarationFileOrPackageIdentifier(declarationSource)}.${declarationName
+      if (packageOrFile == null){
+        return null;
+      }
+
+      return `${packageOrFile}${declarationName
         .split(".")
         .reverse()
-        .map((part, idx) => idx === 0 ? `"${part}()"` : `"${part}"`)
+        .map((part, idx) => (idx === 0 ? `"${part}()"` : `"${part}"`))
         .reverse()
         .join(".")}`;
     };
+    const rootDeclarationId = getD2Identifier(rootDeclaration) ?? "root";
 
-    console.log("direction: down")
-    console.log(
-      `${getDeclarationFileOrPackageIdentifier(source)}: { near: top-center }`,
-    );
-    console.log(`${getD2Identifier(rootDeclaration)}.style.fill: "#a3ffd7"`);
+    const rootIdentifier =
+      getDeclarationFileOrPackageIdentifier(source) ||
+      rootDeclarationId.split(".")[0];
+
+    console.log("direction: down");
+    console.log(`${rootIdentifier}: { near: top-center }`);
+    // if (rootDeclarationId !== rootIdentifier) {
+    //   console.log(`${rootDeclarationId}: { near: top-center }`);
+    // }
+    console.log(`${rootDeclarationId}.style.fill: "#a3ffd7"`);
     console.log(`node_modules.style.fill: "#FFFFFF"`);
-    console.log(`node_modules: { near: bottom-center }`)
+    console.log(`node_modules: { near: bottom-center }`);
 
     trace.forEach((references, declaration) => {
       const declarationIdentifier = getD2Identifier(declaration);
+      if (!declarationIdentifier) {
+        return;
+      }
 
       references.forEach((reference) => {
+        const referenceIdentifier = getD2Identifier(reference);
+        if (!referenceIdentifier) {
+          return;
+        }
         console.log(
-          `${declarationIdentifier} -> ${getD2Identifier(reference)}`,
+          `${declarationIdentifier} -> ${referenceIdentifier}`,
         );
       });
     });
@@ -288,6 +323,14 @@ export interface RunArgs {
    * Enables debug mode.
    */
   debug?: boolean;
+  /**
+   * Omit file names from the output.
+   */
+  omitFileNames?: boolean;
+  /**
+   * Packages from node modules that should be ignored.
+   */
+  ignorePackages?: string[];
 }
 
 export interface CallGraphGeneratorConstructorArgs {

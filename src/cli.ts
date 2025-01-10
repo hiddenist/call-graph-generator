@@ -8,6 +8,8 @@ yargs(hideBin(process.argv))
     callTarget: string;
     tsconfig?: string;
     debug?: boolean;
+    omitFileNames?: boolean;
+    ignorePackage?: string[]
   }>(
     "$0 <sourceFile> <callTarget>",
     "generate a call graph",
@@ -26,6 +28,8 @@ yargs(hideBin(process.argv))
           callableExpressionName: argv.callTarget,
           tsConfigFilePath: argv.tsconfig,
           debug: argv.debug,
+          omitFileNames: argv.omitFileNames,
+          ignorePackages: argv.ignorePackage,
         });
         process.exit(0);
       } catch (e) {
@@ -41,13 +45,24 @@ yargs(hideBin(process.argv))
       }
     },
   )
-  .option("tsconfig", {
-    alias: "t",
-    type: "string",
-    description: "Path to your tsconfig file",
-  })
-  .option("debug", {
-    type: "boolean",
-    description: "Enable debug mode",
+  .options({
+    "tsconfig": {
+      alias: "t",
+      type: "string",
+      description: "Path to your tsconfig file",
+    },
+    "ignorePackage": {
+      alias: "i",
+      type: "array",
+      description: "Packages from node modules that should be ignored"
+    },
+    "debug": {
+      type: "boolean",
+      description: "Enable debug mode",
+    },
+    "omitFileNames": {
+      type: "boolean",
+      description: "Omit file names from the output",
+    },
   })
   .parse();
