@@ -1,0 +1,33 @@
+{
+  "name": "call-graph-generator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "moduleResolution": "nodenext",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a",
+  "peerDependencies": {
+    "ts-morph": "^25.0.0",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^22.10.5",
+    "@types/yargs": "^17.0.33",
+    "eslint": "^9.17.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "ts-morph": "^25.0.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.19.1"
+  },
+  "dependencies": {
+    "yargs": "^17.7.2"
+  }
+}
