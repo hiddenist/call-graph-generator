@@ -1,8 +1,4 @@
-import tsm from "ts-morph";
-
-function test() {
-  // nothing
-}
+import tsm, { DefaultClause } from "ts-morph";
 
 export class CallGraphGenerator {
   private project: tsm.Project;
@@ -22,21 +18,17 @@ export class CallGraphGenerator {
     }
     const instance = new CallGraphGenerator(args);
 
-    test();
-
     if (debug) {
       console.debug("Enabling debug mode on instance");
       instance.debugEnabled = true;
     }
 
-    test();
-
     const source = instance.project.getSourceFileOrThrow(sourceFile);
 
-    const executionSteps = instance.findDeclaration(source, executionName);
-    const trace = instance.traceExecution(executionSteps);
+    const declaration = instance.findDeclaration(source, executionName);
+    const trace = instance.traceExecution(declaration);
 
-    instance.writeTraceAsD2Graph(trace);
+    instance.writeTraceAsD2Graph(source, declaration, trace);
 
     if (debug) {
       console.debug("Run complete");
@@ -101,7 +93,7 @@ export class CallGraphGenerator {
     return declaration;
   }
 
-  private traceExecution(declaration: Declaration) {
+  private traceExecution(declaration: Declaration): Trace {
     const trace = new Map<Declaration, Set<Declaration>>();
     const traceStack = [declaration];
     for (let i = 0; i < traceStack.length; i++) {
@@ -110,7 +102,7 @@ export class CallGraphGenerator {
         throw new Error("No current declaration");
       }
 
-      const references = this.getCallReferences(currentDeclaration);
+      const references = this.getChildDeclarations(currentDeclaration);
       trace.set(currentDeclaration, references);
 
       const nextDeclarations = Array.from(references).filter(
@@ -120,6 +112,8 @@ export class CallGraphGenerator {
 
       traceStack.push(...nextDeclarations);
     }
+
+    return trace;
   }
 
   private isLocalDeclaration(declaration: Declaration): boolean {
@@ -135,7 +129,7 @@ export class CallGraphGenerator {
     return !isInNodeModules;
   }
 
-  private getCallReferences(declaration: Declaration): Set<Declaration> {
+  private getChildDeclarations(declaration: Declaration): Set<Declaration> {
     this.debug(() => [
       "Tracing execution for statements of ",
       CallGraphGenerator.getDeclarationName(declaration),
@@ -212,10 +206,61 @@ export class CallGraphGenerator {
     return declaration.getName() ?? "anonymous";
   }
 
-  private writeTraceAsD2Graph(trace: Trace): void {
-    this.debug("Writing trace as D2 graph (unimplemented)", trace);
+  private writeTraceAsD2Graph(
+    source: tsm.SourceFile,
+    rootDeclaration: Declaration,
+    trace: Trace,
+  ): void {
+    const getDeclarationFileOrPackageIdentifier = (
+      sourceFile: tsm.SourceFile,
+    ) => {
+      if (sourceFile === source) {
+        return `"Current File"`;
+      }
+      if (!sourceFile.isInNodeModules()) {
+        const relativePath =
+          source.getRelativePathAsModuleSpecifierTo(sourceFile) + `.${sourceFile.getExtension()}`;
+        return `"${relativePath}"`;
+      }
 
-    if (!this.debugEnabled) throw new Error("Unimplemented");
+      const parts = sourceFile.getFilePath().split("node_modules");
+      const packageName =
+        parts.pop()?.match(/\/(?<packageName>(@[^\/]+\/)?([^\/]+))\//)?.groups
+          ?.packageName ?? `node_modules."Unknown Package"`;
+      return `node_modules."${packageName}"`;
+    };
+
+    const getD2Identifier = (declaration: Declaration) => {
+      const declarationName =
+        CallGraphGenerator.getDeclarationName(declaration);
+
+      const declarationSource = declaration.getSourceFile();
+
+      return `${getDeclarationFileOrPackageIdentifier(declarationSource)}.${declarationName
+        .split(".")
+        .reverse()
+        .map((part, idx) => idx === 0 ? `"${part}()"` : `"${part}"`)
+        .reverse()
+        .join(".")}`;
+    };
+
+    console.log("direction: down")
+    console.log(
+      `${getDeclarationFileOrPackageIdentifier(source)}: { near: top-center }`,
+    );
+    console.log(`${getD2Identifier(rootDeclaration)}.style.fill: "#a3ffd7"`);
+    console.log(`node_modules.style.fill: "#FFFFFF"`);
+    console.log(`node_modules: { near: bottom-center }`)
+
+    trace.forEach((references, declaration) => {
+      const declarationIdentifier = getD2Identifier(declaration);
+
+      references.forEach((reference) => {
+        console.log(
+          `${declarationIdentifier} -> ${getD2Identifier(reference)}`,
+        );
+      });
+    });
   }
 }
 
