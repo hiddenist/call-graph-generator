@@ -191,12 +191,13 @@ export class CallGraphGenerator {
 
     if (
       !tsm.Node.isFunctionDeclaration(definition) &&
-      !tsm.Node.isMethodDeclaration(definition)
+      !tsm.Node.isMethodDeclaration(definition) &&
+      !tsm.Node.isMethodSignature(definition)
     ) {
       this.debug(() => [
-        " -> skipping",
+        " ->",
         call.getExpression().getText(),
-        "because kind is",
+        "kind is",
         definition.getKindName(),
       ]);
       return null;
@@ -206,10 +207,14 @@ export class CallGraphGenerator {
   }
 
   private static getDeclarationName(declaration: Declaration): string {
+    const declarationName = declaration.getName() ?? "[anonymous]";
     if (tsm.Node.isMethodDeclaration(declaration)) {
-      return `${declaration.getFirstAncestorByKind(tsm.SyntaxKind.ClassDeclaration)?.getName()}.${declaration.getName()}`;
+      return `${declaration.getFirstAncestorByKind(tsm.SyntaxKind.ClassDeclaration)?.getName() ?? `[UnknownClass]`}.${declarationName}`;
     }
-    return declaration.getName() ?? "anonymous";
+    if (tsm.Node.isMethodSignature(declaration)) {
+      return `${declaration.getFirstAncestorByKind(tsm.SyntaxKind.InterfaceDeclaration)?.getName() ?? `[UnknownInterface]`}.${declarationName}`;
+    }
+    return declarationName;
   }
 
   private writeTraceAsD2Graph(
@@ -301,7 +306,7 @@ export class CallGraphGenerator {
 }
 
 type Trace = Map<Declaration, Set<Declaration>>;
-type Declaration = tsm.MethodDeclaration | tsm.FunctionDeclaration;
+type Declaration = tsm.MethodDeclaration | tsm.FunctionDeclaration | tsm.MethodSignature;
 
 export interface RunArgs {
   /**
